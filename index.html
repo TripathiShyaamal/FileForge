@@ -1,0 +1,539 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FileForge — SVG · PNG · PDF · Word Converter</title>
+<!--
+  FileForge — client-side file converter
+  =======================================
+  Save this file as index.html and serve with any static server:
+    python -m http.server 8080
+    npx serve .
+
+  Do NOT open via file:// — use a local server or deploy to
+  Vercel / Netlify / Cloudflare Pages for full download support.
+
+  CDN dependencies (internet required):
+    jszip       3.10.1
+    jspdf       2.5.1
+    pdf.js      3.11.174
+    mammoth     1.6.0
+-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<style>
+:root{--p:#4f46e5;--bg:#f1f5f9;--bd:#e2e8f0;--tx:#1e293b;--mu:#64748b;--ok:#10b981;--r:12px;--rs:8px;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);}
+.hdr{background:linear-gradient(135deg,#312e81,#4f46e5,#818cf8);padding:24px 20px;text-align:center;}
+.logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:5px;}
+.logo-ico{width:36px;height:36px;background:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.logo-nm{font-size:22px;font-weight:800;color:#fff;}
+.hdr p{color:rgba(255,255,255,.75);font-size:13px;}
+/* Sandbox banner */
+.sb-banner{background:#fefce8;border:1px solid #fde047;border-radius:var(--r);padding:14px 18px;margin-bottom:16px;display:none;gap:12px;align-items:flex-start;}
+.sb-banner.visible{display:flex;}
+.sb-ico{font-size:20px;flex-shrink:0;margin-top:1px;}
+.sb-body{flex:1;font-size:13px;color:#713f12;line-height:1.55;}
+.sb-body strong{display:block;font-size:14px;margin-bottom:3px;color:#451a03;}
+.sb-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+.sb-btn{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:none;}
+.sb-btn-deploy{background:#4f46e5;color:#fff;}
+.sb-btn-dismiss{background:#fff;border:1px solid #d97706 !important;color:#92400e;}
+/* Layout */
+.wrap{max-width:960px;margin:0 auto;padding:18px 14px 48px;}
+.tabs{display:flex;gap:3px;background:#fff;border-radius:var(--r);padding:5px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow-x:auto;}
+.tab{flex:1;padding:8px 10px;border:none;background:transparent;border-radius:var(--rs);font-size:13px;font-weight:500;color:var(--mu);cursor:pointer;white-space:nowrap;}
+.tab:hover{background:#f1f5f9;}.tab.active{background:var(--p);color:#fff;}
+.panel{display:none;}.panel.active{display:block;}
+.pdesc{background:#fff;border-radius:var(--r);padding:16px 20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;justify-content:space-between;align-items:center;gap:14px;}
+.pdesc h2{font-size:17px;font-weight:700;margin-bottom:2px;}
+.pdesc p{color:var(--mu);font-size:12px;line-height:1.5;}
+.badge{background:#e0e7ff;color:var(--p);border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;flex-shrink:0;}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+@media(max-width:640px){.grid{grid-template-columns:1fr;}}
+.card{background:#fff;border-radius:var(--r);padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.card h3{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--mu);margin-bottom:10px;}
+.dz{border:2px dashed var(--bd);border-radius:var(--rs);padding:24px 12px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;user-select:none;}
+.dz:hover,.dz.over{border-color:var(--p);background:#eef2ff;}
+.dz-ico{font-size:26px;margin-bottom:5px;}
+.dz-tx{font-size:13px;margin-bottom:2px;}.lk{color:var(--p);text-decoration:underline;}
+.dz-ht{font-size:11px;color:var(--mu);}
+.fi{display:flex;align-items:center;gap:8px;background:#f8fafc;border-radius:var(--rs);padding:8px 12px;margin-top:8px;border:1px solid var(--bd);}
+.fi-det{flex:1;min-width:0;}.fi-nm{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.fi-sz{font-size:10px;color:var(--mu);}
+.og{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;}
+.og label{display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:600;color:var(--mu);}
+.og input,.og select{padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;color:var(--tx);background:#fff;outline:none;}
+.ta{width:100%;padding:8px;border:1px solid var(--bd);border-radius:var(--rs);font-size:11px;font-family:monospace;resize:vertical;min-height:80px;outline:none;color:var(--tx);margin-top:4px;}
+.sep{border:none;border-top:1px solid var(--bd);margin:10px 0;}
+.btn{width:100%;padding:10px;border:none;border-radius:var(--rs);font-size:13px;font-weight:600;cursor:pointer;margin-top:8px;display:block;}
+.btn-p{background:var(--p);color:#fff;}.btn-p:hover{background:#4338ca;}
+.btn-dl{background:var(--ok);color:#fff;}.btn-dl:hover{background:#059669;}
+.btn-dl:disabled{background:#94a3b8;cursor:not-allowed;}
+.btn-copy{background:#0ea5e9;color:#fff;margin-top:6px;}.btn-copy:hover{background:#0284c7;}
+.st{border-radius:var(--rs);padding:8px 12px;font-size:12px;margin-top:8px;display:none;}
+.st.on{display:block;}
+.st.info{background:#eff6ff;color:#1d4ed8;}.st.ok{background:#ecfdf5;color:#065f46;}
+.st.er{background:#fef2f2;color:#991b1b;}.st.wn{background:#fffbeb;color:#92400e;}
+.result-img{background:#111;border-radius:var(--rs);padding:8px;text-align:center;display:none;}
+.result-img img{max-width:100%;max-height:240px;border-radius:6px;}
+.rc-hint{font-size:11px;color:#94a3b8;margin-top:5px;}
+.pdf-wrap{display:none;margin-top:8px;}
+.pdf-wrap embed{width:100%;height:350px;border-radius:var(--rs);display:block;border:1px solid var(--bd);}
+.text-result{display:none;margin-top:8px;}
+.text-result textarea{width:100%;height:160px;padding:8px;border:1px solid var(--bd);border-radius:var(--rs);font-size:11px;font-family:monospace;resize:vertical;outline:none;color:var(--tx);}
+.pv-empty{min-height:130px;background:#f8fafc;border:1px solid var(--bd);border-radius:var(--rs);display:flex;align-items:center;justify-content:center;color:var(--mu);font-size:12px;text-align:center;padding:16px;}
+.lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mu);margin:8px 0 4px;text-align:center;}
+.dlf{border-radius:var(--rs);padding:12px 14px;margin-top:8px;border:1px solid;display:none;}
+.dlf.show{display:block;}
+.dlf-blocked{background:#fef3c7;border-color:#fde68a;}
+.dlf-started{background:#f0fdf4;border-color:#bbf7d0;}
+.dlf-msg{font-size:12px;line-height:1.55;margin-bottom:9px;}
+.dlf-btns{display:flex;gap:6px;flex-wrap:wrap;}
+.dlf-btn{padding:6px 12px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;}
+.dlf-tab{background:#4f46e5;color:#fff;}
+.dlf-retry{background:#fff;border:1px solid #d1d5db;color:#374151;}
+.dlf-copy{background:#fff;border:1px solid #d1d5db;color:#374151;}
+.mt{margin-top:10px;}.hidden{display:none!important;}
+.foot{text-align:center;color:var(--mu);font-size:11px;padding:16px;border-top:1px solid var(--bd);margin-top:20px;}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo"><div class="logo-ico">⚡</div><span class="logo-nm">FileForge</span></div>
+  <p>SVG · PNG · PDF · Word — convert files entirely in your browser</p>
+</div>
+
+<div class="wrap">
+
+  <div class="sb-banner" id="sb-banner">
+    <div class="sb-ico">⚠️</div>
+    <div class="sb-body">
+      <strong>Preview environment detected — downloads are restricted</strong>
+      This app is running inside a sandboxed iframe. The browser blocks automatic file downloads
+      in this context. <b>Conversions work correctly.</b> To download files, run this file locally
+      with a static server or deploy it.
+      <div class="sb-btns">
+        <button class="sb-btn sb-btn-dismiss" onclick="document.getElementById('sb-banner').style.display='none'">Dismiss</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="sp">🖼 SVG → PNG</button>
+    <button class="tab" data-tab="ps">✦ PNG → SVG</button>
+    <button class="tab" data-tab="pw">📄 PDF → Word</button>
+    <button class="tab" data-tab="wp">📝 Word → PDF</button>
+  </div>
+
+  <!-- SVG → PNG -->
+  <div class="panel active" id="panel-sp">
+    <div class="pdesc"><div><h2>SVG → PNG</h2><p>Convert SVG to raster PNG. Supports transparency, custom size, and retina scaling.</p></div><div class="badge">Client-side</div></div>
+    <div class="grid">
+      <div>
+        <div class="card">
+          <h3>Upload or Paste SVG</h3>
+          <div class="dz" id="dz-sp"><input type="file" id="f-sp" accept=".svg,image/svg+xml" hidden>
+            <div class="dz-ico">🖼️</div><div class="dz-tx">Drop .svg or <span class="lk">browse</span></div><div class="dz-ht">Any size</div>
+          </div>
+          <div class="fi hidden" id="fi-sp"><span>📄</span><div class="fi-det"><div class="fi-nm" id="fn-sp"></div><div class="fi-sz" id="fs-sp"></div></div></div>
+          <hr class="sep"><h3>Or paste code</h3>
+          <textarea class="ta" id="ta-sp" placeholder='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">…</svg>'></textarea>
+        </div>
+        <div class="card mt">
+          <h3>Options</h3>
+          <div class="og">
+            <label>Width (px)<input type="number" id="ow-sp" placeholder="Auto" min="1"></label>
+            <label>Height (px)<input type="number" id="oh-sp" placeholder="Auto" min="1"></label>
+            <label>Scale<select id="os-sp"><option value="1">1×</option><option value="2" selected>2×</option><option value="3">3×</option><option value="4">4×</option></select></label>
+            <label>Background<select id="ob-sp"><option>transparent</option><option>white</option><option>black</option></select></label>
+          </div>
+        </div>
+        <button class="btn btn-p" id="btn-sp">Convert to PNG</button>
+        <div class="st" id="st-sp"></div>
+      </div>
+      <div>
+        <div class="card">
+          <h3>Result</h3>
+          <div id="pv-sp" class="pv-empty">Convert something to see the result</div>
+          <div class="result-img" id="ri-sp"><img id="img-sp"><div class="rc-hint">Right-click → Save image as (always works)</div></div>
+        </div>
+        <button class="btn btn-dl" id="bdl-sp" disabled>⬇ Download PNG</button>
+        <div class="dlf" id="dlf-sp">
+          <p class="dlf-msg" id="dlf-sp-msg"></p>
+          <div class="dlf-btns">
+            <button class="dlf-btn dlf-tab" id="dlf-sp-tab">🔗 Open in new tab</button>
+            <button class="dlf-btn dlf-retry" id="dlf-sp-retry">↺ Retry</button>
+            <button class="dlf-btn dlf-copy" id="dlf-sp-copy">📋 Copy URL</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PNG → SVG -->
+  <div class="panel" id="panel-ps">
+    <div class="pdesc"><div><h2>PNG → SVG</h2><p>Vectorize PNG via pixel-region tracing. Best for flat-color logos and icons.</p></div><div class="badge">Client-side</div></div>
+    <div class="grid">
+      <div>
+        <div class="card">
+          <h3>Upload PNG</h3>
+          <div class="dz" id="dz-ps"><input type="file" id="f-ps" accept="image/png" hidden>
+            <div class="dz-ico">🏞️</div><div class="dz-tx">Drop .png or <span class="lk">browse</span></div><div class="dz-ht">Max 10 MB</div>
+          </div>
+          <div class="fi hidden" id="fi-ps"><span>🖼</span><div class="fi-det"><div class="fi-nm" id="fn-ps"></div><div class="fi-sz" id="fs-ps"></div></div></div>
+        </div>
+        <div class="card mt">
+          <h3>Options</h3>
+          <div class="og">
+            <label>Resolution<select id="or-ps"><option value="150">Fine</option><option value="100" selected>Medium</option><option value="60">Coarse</option></select></label>
+            <label>Transparency<select id="ot-ps"><option value="1" selected>Preserve</option><option value="0">White fill</option></select></label>
+          </div>
+        </div>
+        <div class="st wn on mt">ℹ️ Best for logos &amp; flat-color art.</div>
+        <button class="btn btn-p" id="btn-ps">Vectorize to SVG</button>
+        <div class="st" id="st-ps"></div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="lbl">Source</div>
+          <div class="pv-empty" id="pv-src-ps">Upload a PNG to preview</div>
+          <div class="lbl mt">Output SVG</div>
+          <div class="result-img" id="ri-ps"><img id="img-ps"><div class="rc-hint">Right-click → Save image as (always works)</div></div>
+          <div class="pv-empty" id="pv-out-ps" style="margin-top:4px;">Awaiting conversion</div>
+        </div>
+        <button class="btn btn-dl" id="bdl-ps" disabled>⬇ Download SVG</button>
+        <div class="dlf" id="dlf-ps">
+          <p class="dlf-msg" id="dlf-ps-msg"></p>
+          <div class="dlf-btns">
+            <button class="dlf-btn dlf-tab" id="dlf-ps-tab">🔗 Open in new tab</button>
+            <button class="dlf-btn dlf-retry" id="dlf-ps-retry">↺ Retry</button>
+            <button class="dlf-btn dlf-copy" id="dlf-ps-copy">📋 Copy URL</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PDF → Word -->
+  <div class="panel" id="panel-pw">
+    <div class="pdesc"><div><h2>PDF → Word (.docx)</h2><p>Extracts text from PDF and packages as an editable .docx. Tables and images are not preserved.</p></div><div class="badge">Client-side</div></div>
+    <div class="grid">
+      <div>
+        <div class="card">
+          <h3>Upload PDF</h3>
+          <div class="dz" id="dz-pw"><input type="file" id="f-pw" accept="application/pdf,.pdf" hidden>
+            <div class="dz-ico">📑</div><div class="dz-tx">Drop .pdf or <span class="lk">browse</span></div><div class="dz-ht">Max 50 MB</div>
+          </div>
+          <div class="fi hidden" id="fi-pw"><span>📑</span><div class="fi-det"><div class="fi-nm" id="fn-pw"></div><div class="fi-sz" id="fs-pw"></div></div></div>
+        </div>
+        <button class="btn btn-p" id="btn-pw">Convert to .docx</button>
+        <div class="st" id="st-pw"></div>
+      </div>
+      <div>
+        <div class="card">
+          <h3>Preview</h3>
+          <div class="pv-empty" id="pv-pw-empty">Upload a PDF to preview</div>
+          <div class="text-result" id="tr-pw">
+            <textarea id="txt-pw" readonly></textarea>
+            <button class="btn btn-copy" id="btn-copy-pw">📋 Copy text to clipboard</button>
+          </div>
+        </div>
+        <button class="btn btn-dl" id="bdl-pw" disabled>⬇ Download .docx</button>
+        <div class="dlf" id="dlf-pw">
+          <p class="dlf-msg" id="dlf-pw-msg"></p>
+          <div class="dlf-btns">
+            <button class="dlf-btn dlf-tab" id="dlf-pw-tab">🔗 Open in new tab</button>
+            <button class="dlf-btn dlf-retry" id="dlf-pw-retry">↺ Retry</button>
+            <button class="dlf-btn dlf-copy" id="dlf-pw-copy">📋 Copy URL</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Word → PDF -->
+  <div class="panel" id="panel-wp">
+    <div class="pdesc"><div><h2>Word → PDF</h2><p>Converts .docx text to a paginated PDF. Images and complex formatting may not carry over.</p></div><div class="badge">Client-side</div></div>
+    <div class="grid">
+      <div>
+        <div class="card">
+          <h3>Upload Word Document</h3>
+          <div class="dz" id="dz-wp"><input type="file" id="f-wp" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
+            <div class="dz-ico">📝</div><div class="dz-tx">Drop .docx or <span class="lk">browse</span></div><div class="dz-ht">Max 20 MB</div>
+          </div>
+          <div class="fi hidden" id="fi-wp"><span>📝</span><div class="fi-det"><div class="fi-nm" id="fn-wp"></div><div class="fi-sz" id="fs-wp"></div></div></div>
+        </div>
+        <div class="card mt">
+          <h3>Options</h3>
+          <div class="og">
+            <label>Page size<select id="ops-wp"><option value="a4" selected>A4</option><option value="letter">Letter</option></select></label>
+            <label>Font size<select id="ofs-wp"><option value="10">10 pt</option><option value="11" selected>11 pt</option><option value="12">12 pt</option></select></label>
+          </div>
+        </div>
+        <button class="btn btn-p" id="btn-wp">Convert to PDF</button>
+        <div class="st" id="st-wp"></div>
+      </div>
+      <div>
+        <div class="card">
+          <h3>Preview</h3>
+          <div class="pv-empty" id="pv-wp-empty">Upload a .docx to generate PDF</div>
+          <div class="pdf-wrap" id="pw-pdf">
+            <embed id="pdf-embed" type="application/pdf">
+            <div class="rc-hint" style="margin-top:6px;color:var(--mu);">Use the viewer's <b>⬇ toolbar button</b> to save — or click Download below</div>
+          </div>
+        </div>
+        <button class="btn btn-dl" id="bdl-wp" disabled>⬇ Download PDF</button>
+        <div class="dlf" id="dlf-wp">
+          <p class="dlf-msg" id="dlf-wp-msg"></p>
+          <div class="dlf-btns">
+            <button class="dlf-btn dlf-tab" id="dlf-wp-tab">🔗 Open in new tab</button>
+            <button class="dlf-btn dlf-retry" id="dlf-wp-retry">↺ Retry</button>
+            <button class="dlf-btn dlf-copy" id="dlf-wp-copy">📋 Copy URL</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<div class="foot">🔒 All conversions run locally in your browser — files never leave your device.</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = b => b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';
+function setSt(id,cls,msg){const e=$(id);e.className='st '+cls+' on';e.textContent=msg;}
+function showFI(pfx,file){$('fn-'+pfx).textContent=file.name;$('fs-'+pfx).textContent=fmt(file.size);$('fi-'+pfx).classList.remove('hidden');}
+function readAs(file,type){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=()=>rej(new Error('File read failed'));type==='ab'?r.readAsArrayBuffer(file):type==='url'?r.readAsDataURL(file):r.readAsText(file);});}
+
+// Detect sandboxed iframe (Claude preview, etc.)
+const IS_SANDBOXED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
+if(IS_SANDBOXED){
+  $('sb-banner').classList.add('visible');
+  console.warn('[FileForge] Sandboxed iframe detected. Downloads will be blocked by the browser.');
+}
+
+// Output state — blobs stored here after conversion, read on download click
+const OUT={
+  sp:{blob:null,name:'converted.png'},
+  ps:{blob:null,name:'converted.svg'},
+  pw:{blob:null,name:'converted.docx'},
+  wp:{blob:null,name:'converted.pdf'}
+};
+
+// ── robustDownload ────────────────────────────────────────────────────────────
+// In a real browser context (local / deployed), Method 1 works immediately.
+// In a sandboxed iframe (Claude artifacts), both methods are silently blocked
+// by the browser because the iframe lacks allow-downloads and allow-popups.
+// There is no JavaScript workaround for this — it is an OS/browser-level block.
+async function robustDownload(blob,filename){
+  if(!blob)return{ok:false,method:'no_blob',url:null};
+  const mimes={png:'image/png',svg:'image/svg+xml',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',pdf:'application/pdf'};
+  const ext=filename.split('.').pop().toLowerCase();
+  const mime=mimes[ext]||'application/octet-stream';
+  const b=blob.type===mime?blob:new Blob([blob],{type:mime});
+  const url=URL.createObjectURL(b);
+  setTimeout(()=>URL.revokeObjectURL(url),120000);
+  console.log('[FileForge] robustDownload',{filename,mime,size:fmt(b.size),sandboxed:IS_SANDBOXED});
+  // Method 1: anchor + DOM append + click (standard, works in all real browsers)
+  try{
+    const a=document.createElement('a');
+    a.href=url;a.download=filename;a.style.display='none';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    console.log('[FileForge] Method 1 (anchor) fired');
+    return{ok:!IS_SANDBOXED,method:'anchor',url};
+  }catch(e){console.warn('[FileForge] Method 1 threw:',e.message);}
+  // Method 2: window.open new tab
+  try{
+    const w=window.open(url,'_blank','noopener,noreferrer');
+    if(w){console.log('[FileForge] Method 2 (new tab) opened');return{ok:true,method:'new_tab',url};}
+    console.warn('[FileForge] Method 2: window.open returned null');
+  }catch(e){console.warn('[FileForge] Method 2 threw:',e.message);}
+  console.error('[FileForge] All methods blocked. Blob URL (manual use):',url);
+  return{ok:false,method:'blocked',url};
+}
+
+async function handleDownload(pfx){
+  const{blob,name}=OUT[pfx];
+  if(!blob){setSt('st-'+pfx,'er','✗ No file yet — run the conversion first.');return;}
+  const result=await robustDownload(blob,name);
+  renderFallback(pfx,result,blob,name);
+}
+
+function renderFallback(pfx,result,blob,name){
+  const panel=$('dlf-'+pfx),msg=$('dlf-'+pfx+'-msg');
+  const blocked=!result.ok;
+  panel.className='dlf show '+(blocked?'dlf-blocked':'dlf-started');
+  if(blocked&&IS_SANDBOXED){
+    msg.innerHTML='<b>Download blocked by sandbox.</b> This app is running inside a sandboxed iframe (e.g. Claude artifact preview) which forbids automatic downloads. Use the options below, or save the HTML file and open it locally.';
+  }else if(blocked){
+    msg.innerHTML='<b>Download was blocked.</b> Your browser may have a download or popup blocker active. Try the options below.';
+  }else{
+    msg.innerHTML=`✓ Download started. If it didn't begin, use the options below.`;
+  }
+  $('dlf-'+pfx+'-tab').onclick=()=>{const u=URL.createObjectURL(blob);setTimeout(()=>URL.revokeObjectURL(u),120000);const w=window.open(u,'_blank','noopener,noreferrer');if(!w)$('dlf-'+pfx+'-tab').textContent='🚫 Popup blocked';};
+  $('dlf-'+pfx+'-retry').onclick=()=>handleDownload(pfx);
+  $('dlf-'+pfx+'-copy').onclick=async()=>{const u=URL.createObjectURL(blob);setTimeout(()=>URL.revokeObjectURL(u),120000);try{await navigator.clipboard.writeText(u);$('dlf-'+pfx+'-copy').textContent='✓ Copied!';setTimeout(()=>$('dlf-'+pfx+'-copy').textContent='📋 Copy URL',2500);}catch(e){window.prompt('Copy this temporary URL:',u);}};
+}
+
+// Tabs & dropzones
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));t.classList.add('active');$('panel-'+t.dataset.tab).classList.add('active');}));
+function mkDrop(dz,fi,cb){const d=$(dz),i=$(fi);d.addEventListener('click',()=>i.click());i.addEventListener('change',e=>e.target.files[0]&&cb(e.target.files[0]));d.addEventListener('dragover',e=>{e.preventDefault();d.classList.add('over');});d.addEventListener('dragleave',()=>d.classList.remove('over'));d.addEventListener('drop',e=>{e.preventDefault();d.classList.remove('over');e.dataTransfer.files[0]&&cb(e.dataTransfer.files[0]);});}
+
+// ── SVG → PNG ─────────────────────────────────────────────────────────────────
+mkDrop('dz-sp','f-sp',async file=>{showFI('sp',file);$('ta-sp').value=await readAs(file,'text');});
+$('btn-sp').addEventListener('click',async()=>{
+  const code=$('ta-sp').value.trim();
+  if(!code){setSt('st-sp','er','⚠ Upload or paste an SVG first.');return;}
+  setSt('st-sp','info','🔄 Rendering…');OUT.sp.blob=null;$('bdl-sp').disabled=true;$('dlf-sp').className='dlf';
+  try{
+    const parser=new DOMParser();const doc=parser.parseFromString(code,'image/svg+xml');const el=doc.querySelector('svg');
+    let sw=parseFloat(el?.getAttribute('width'))||0,sh=parseFloat(el?.getAttribute('height'))||0;
+    if(!sw||!sh){const vb=(el?.getAttribute('viewBox')||'').split(/[\s,]+/);sw=parseFloat(vb[2])||100;sh=parseFloat(vb[3])||100;}
+    const sc=parseFloat($('os-sp').value);
+    const outW=parseInt($('ow-sp').value)||Math.round(sw*sc);
+    const outH=parseInt($('oh-sp').value)||Math.round(sh*sc);
+    const bg=$('ob-sp').value;
+    const svgBlob=new Blob([code],{type:'image/svg+xml;charset=utf-8'});
+    const svgUrl=URL.createObjectURL(svgBlob);
+    await new Promise((res,rej)=>{
+      const img=new Image();
+      img.onload=()=>{
+        const cv=document.createElement('canvas');cv.width=outW;cv.height=outH;
+        const ctx=cv.getContext('2d');
+        if(bg!=='transparent'){ctx.fillStyle=bg;ctx.fillRect(0,0,outW,outH);}
+        ctx.drawImage(img,0,0,outW,outH);URL.revokeObjectURL(svgUrl);
+        cv.toBlob(blob=>{
+          if(!blob){rej(new Error('Canvas toBlob returned null'));return;}
+          OUT.sp.blob=blob;
+          $('img-sp').src=URL.createObjectURL(blob);
+          $('pv-sp').classList.add('hidden');$('ri-sp').style.display='block';
+          $('bdl-sp').disabled=false;
+          setSt('st-sp','ok',`✓ ${outW}×${outH}px · ${fmt(blob.size)}`);res();
+        },'image/png');
+      };
+      img.onerror=()=>{URL.revokeObjectURL(svgUrl);rej(new Error('Invalid SVG'));};
+      img.src=svgUrl;
+    });
+  }catch(e){setSt('st-sp','er','✗ '+e.message);}
+});
+$('bdl-sp').addEventListener('click',()=>handleDownload('sp'));
+
+// ── PNG → SVG ─────────────────────────────────────────────────────────────────
+let psFile=null;
+mkDrop('dz-ps','f-ps',file=>{
+  if(file.size>10*1024*1024){setSt('st-ps','er','✗ Max 10 MB.');return;}
+  psFile=file;showFI('ps',file);OUT.ps.name=file.name.replace(/\.png$/i,'')+'.svg';
+  $('pv-src-ps').innerHTML=`<img src="${URL.createObjectURL(file)}" style="max-width:100%;max-height:120px;border-radius:6px;">`;
+  $('pv-src-ps').style.minHeight='auto';
+});
+$('btn-ps').addEventListener('click',async()=>{
+  if(!psFile){setSt('st-ps','er','⚠ Upload a PNG first.');return;}
+  setSt('st-ps','info','🔄 Vectorizing…');OUT.ps.blob=null;$('bdl-ps').disabled=true;$('dlf-ps').className='dlf';
+  try{
+    const imgUrl=URL.createObjectURL(psFile);
+    await new Promise((res,rej)=>{
+      const img=new Image();
+      img.onload=()=>{
+        URL.revokeObjectURL(imgUrl);
+        const maxB=parseInt($('or-ps').value);
+        const bw=Math.max(1,Math.ceil(img.width/maxB)),bh=Math.max(1,Math.ceil(img.height/maxB));
+        const cols=Math.ceil(img.width/bw),rows=Math.ceil(img.height/bh);
+        const cv=document.createElement('canvas');cv.width=cols;cv.height=rows;
+        const ctx=cv.getContext('2d');ctx.drawImage(img,0,0,cols,rows);
+        const d=ctx.getImageData(0,0,cols,rows).data;const keepA=$('ot-ps').value==='1';
+        const rects=[];
+        for(let y=0;y<rows;y++){let rx=0,rc=null;for(let x=0;x<=cols;x++){let color=null;if(x<cols){const i=(y*cols+x)*4;const[R,G,B,A]=[d[i],d[i+1],d[i+2],d[i+3]];if(!keepA||A>=20)color='#'+[R,G,B].map(v=>v.toString(16).padStart(2,'0')).join('');}if(color!==rc){if(rc!==null)rects.push(`<rect x="${rx*bw}" y="${y*bh}" width="${(x-rx)*bw}" height="${bh+1}" fill="${rc}"/>`);rx=x;rc=color;}}}
+        const svgStr=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${img.width} ${img.height}" width="${img.width}" height="${img.height}">\n${rects.join('\n')}\n</svg>`;
+        OUT.ps.blob=new Blob([svgStr],{type:'image/svg+xml'});
+        const b64=btoa(unescape(encodeURIComponent(svgStr)));
+        $('img-ps').src=`data:image/svg+xml;base64,${b64}`;
+        $('pv-out-ps').classList.add('hidden');$('ri-ps').style.display='block';
+        $('bdl-ps').disabled=false;
+        setSt('st-ps','ok',`✓ ${rects.length.toLocaleString()} rects · ${fmt(OUT.ps.blob.size)}`);res();
+      };
+      img.onerror=()=>rej(new Error('Could not load image'));img.src=imgUrl;
+    });
+  }catch(e){setSt('st-ps','er','✗ '+e.message);}
+});
+$('bdl-ps').addEventListener('click',()=>handleDownload('ps'));
+
+// ── PDF → Word ────────────────────────────────────────────────────────────────
+if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+let pwFile=null;
+mkDrop('dz-pw','f-pw',file=>{if(file.size>50*1024*1024){setSt('st-pw','er','✗ Max 50 MB.');return;}pwFile=file;showFI('pw',file);OUT.pw.name=file.name.replace(/\.pdf$/i,'')+'.docx';});
+$('btn-pw').addEventListener('click',async()=>{
+  if(!pwFile){setSt('st-pw','er','⚠ Upload a PDF first.');return;}
+  if(typeof pdfjsLib==='undefined'){setSt('st-pw','er','✗ PDF.js not loaded — refresh.');return;}
+  if(typeof JSZip==='undefined'){setSt('st-pw','er','✗ JSZip not loaded — refresh.');return;}
+  setSt('st-pw','info','🔄 Extracting…');OUT.pw.blob=null;$('bdl-pw').disabled=true;$('dlf-pw').className='dlf';
+  try{
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const ab=await readAs(pwFile,'ab');
+    const pdf=await pdfjsLib.getDocument({data:ab}).promise;
+    const total=pdf.numPages;const pages=[];
+    for(let i=1;i<=total;i++){
+      setSt('st-pw','info',`🔄 Page ${i}/${total}…`);
+      const page=await pdf.getPage(i);const content=await page.getTextContent();
+      const lm={};for(const item of content.items){const y=Math.round(item.transform[5]);lm[y]=(lm[y]||'')+item.str;}
+      pages.push(Object.keys(lm).sort((a,b)=>b-a).map(y=>lm[y]).filter(l=>l.trim()));
+    }
+    setSt('st-pw','info','🔄 Building .docx…');
+    OUT.pw.blob=await buildDocx(pages,pwFile.name.replace(/\.pdf$/i,''));
+    const allText=pages.map((p,i)=>(i>0?`\n\n─── Page ${i+1} ───\n\n`:'')+p.join('\n')).join('');
+    $('txt-pw').value=allText;$('pv-pw-empty').classList.add('hidden');$('tr-pw').style.display='block';
+    $('bdl-pw').disabled=false;
+    setSt('st-pw','ok',`✓ ${total} pages · ${fmt(OUT.pw.blob.size)}`);
+  }catch(e){setSt('st-pw','er','✗ '+e.message);}
+});
+async function buildDocx(pages,title){
+  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const zip=new JSZip();
+  zip.file('[Content_Types].xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`);
+  zip.file('_rels/.rels',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
+  let body=`<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t>${esc(title)}</w:t></w:r></w:p><w:p/>`;
+  for(let pi=0;pi<pages.length;pi++){if(pi>0)body+=`<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;body+=`<w:p><w:r><w:rPr><w:b/><w:color w:val="4F46E5"/></w:rPr><w:t>── Page ${pi+1} ──</w:t></w:r></w:p>`;for(const l of pages[pi])body+=`<w:p><w:r><w:t xml:space="preserve">${esc(l)}</w:t></w:r></w:p>`;}
+  zip.file('word/document.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>`);
+  zip.file('word/_rels/document.xml.rels',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`);
+  return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+}
+$('bdl-pw').addEventListener('click',()=>handleDownload('pw'));
+$('btn-copy-pw').addEventListener('click',async()=>{const text=$('txt-pw').value;if(!text)return;try{await navigator.clipboard.writeText(text);$('btn-copy-pw').textContent='✓ Copied!';setTimeout(()=>$('btn-copy-pw').textContent='📋 Copy text to clipboard',2500);}catch(e){$('txt-pw').select();}});
+
+// ── Word → PDF ────────────────────────────────────────────────────────────────
+let wpFile=null;
+mkDrop('dz-wp','f-wp',file=>{if(file.size>20*1024*1024){setSt('st-wp','er','✗ Max 20 MB.');return;}wpFile=file;showFI('wp',file);OUT.wp.name=file.name.replace(/\.docx?$/i,'')+'.pdf';});
+$('btn-wp').addEventListener('click',async()=>{
+  if(!wpFile){setSt('st-wp','er','⚠ Upload a .docx first.');return;}
+  if(typeof mammoth==='undefined'){setSt('st-wp','er','✗ Mammoth.js not loaded.');return;}
+  if(typeof jspdf==='undefined'){setSt('st-wp','er','✗ jsPDF not loaded.');return;}
+  setSt('st-wp','info','🔄 Reading…');OUT.wp.blob=null;$('bdl-wp').disabled=true;$('dlf-wp').className='dlf';
+  try{
+    const ab=await readAs(wpFile,'ab');
+    const result=await mammoth.extractRawText({arrayBuffer:ab});
+    const text=result.value;
+    if(!text.trim()){setSt('st-wp','er','✗ No readable text found.');return;}
+    setSt('st-wp','info','🔄 Generating PDF…');
+    const fs=parseInt($('ofs-wp').value);const{jsPDF}=jspdf;
+    const doc=new jsPDF({unit:'pt',format:$('ops-wp').value});
+    const pgW=doc.internal.pageSize.getWidth(),pgH=doc.internal.pageSize.getHeight();
+    const margin=60,lh=fs*1.5;
+    doc.setFont('helvetica');doc.setFontSize(fs);let y=margin;
+    for(const para of text.split('\n')){if(!para.trim()){y+=lh*.4;continue;}for(const line of doc.splitTextToSize(para.trim(),pgW-margin*2)){if(y+lh>pgH-margin){doc.addPage();y=margin;}doc.text(line,margin,y);y+=lh;}}
+    OUT.wp.blob=doc.output('blob');
+    $('pdf-embed').src=doc.output('datauristring');
+    $('pv-wp-empty').classList.add('hidden');$('pw-pdf').style.display='block';
+    $('bdl-wp').disabled=false;
+    setSt('st-wp','ok',`✓ ${doc.getNumberOfPages()} pages · ${fmt(OUT.wp.blob.size)}`);
+  }catch(e){setSt('st-wp','er','✗ '+e.message);}
+});
+$('bdl-wp').addEventListener('click',()=>handleDownload('wp'));
+</script>
+</body>
+</html>
